@@ -73,7 +73,7 @@ export default {
         left:0;
         right:0;
         .leftAside{
-            width:8% !important;
+            width:85px !important;
             max-width: 100px;
             .menus{
                 height:100%;
@@ -82,12 +82,15 @@ export default {
                     margin: 0  !important;
                     padding: 0 !important;
                     text-align: center;
+                    i{
+                        margin-right:0 !important; 
+                    }
                 }
             }
         }
         .main{
             background-color: #E0E0E0;
-            padding: 0.5% !important;
+            padding: 5px !important;
         }
         
     }

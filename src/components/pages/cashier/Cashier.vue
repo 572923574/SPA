@@ -3,6 +3,7 @@
         <div class="leftContainer">
             <Item :ItemTypes="ItemTypes" :Items="Items" v-on:chooseItem="chooseItem"></Item>
         </div>
+        <div class="leftShade" v-if="leftShade"></div>
         <div class="rightContainer">
             <div class="topMain">
                 <div class="leftEmps">
@@ -12,7 +13,7 @@
                     <div class="queryDiv">
                         <div class="inputKey">
                             <el-input placeholder="车牌/手机/姓名/拼音/卡号,查询会员" prefix-icon="el-icon-search"
-                            select-when-unmatched @select="queryMember" v-model="key" width="300px">
+                            select-when-unmatched @select="queryMember" v-model="key">
                             </el-input>
                         </div>
                         <div class="queryBtn">
@@ -26,21 +27,20 @@
                             <div class="txt"><i class="el-icon-bell"></i><span>{{member.plateNumber}}</span></div>
                         </div>
                         <div class="txtLine">
-                            <!-- <div class="txt"><i class="el-icon-service"></i><span>{{member.}}</span></div> -->
                             <div class="txt">
-                                <span>余额：{{member.cardFee}}元</span>
+                                <span>卡金：{{member.cardFee}}元</span>
                             </div>
                             <div class="txt">
-                                <span>赠送金：{{member.presentFee}}元</span>
+                                <span>赠金：{{member.presentFee}}元</span>
                             </div>
                         </div>
-                        <div>
-                            <el-table :data="PackageData" border >
-                                <el-table-column prop="date" label="套餐" ></el-table-column>
-                                <el-table-column prop="name" label="次数" ></el-table-column>
-                                <el-table-column prop="name" label="总次数" ></el-table-column>
-                                <el-table-column prop="name" label="单价" ></el-table-column>
-                                <el-table-column prop="address" label="日期"> </el-table-column>
+                        <div v-if="member.itemPackages.length>0" @click="chooseMember(member)">
+                            <el-table :data="member.itemPackages" border >
+                                <el-table-column prop="itemName" min-width="130" label="套餐" ></el-table-column>
+                                <el-table-column prop="remainingTimes" min-width="50" label="次数" ></el-table-column>
+                                <el-table-column prop="sunTimes" min-width="60" label="总次数" ></el-table-column>
+                                <el-table-column prop="onceMoney" min-width="60" label="单价" ></el-table-column>
+                                <el-table-column prop="validDate" min-width="90" label="失效日期"> </el-table-column>
                             </el-table>
                         </div>
                     </div>
@@ -69,8 +69,7 @@
                             <el-table-column prop="rawPrice" label="原价" min-width="60"></el-table-column>
                             <el-table-column prop="price" label="实价" min-width="60" class-name="inputCell">
                                 <template slot-scope="scope">
-                                    <el-input v-model.number="scope.row.price">
-                                        </el-input>
+                                    <el-input v-model.number="scope.row.price" :disabled="scope.row.priceDisabled"></el-input>
                                 </template>
                             </el-table-column>
                             <el-table-column label="一工位" min-width="80">
@@ -96,8 +95,11 @@
                             </el-table-column>
                             <el-table-column  label="操作" min-width="80"> 
                                 <template slot-scope="scope">
-                                    <el-button @click.native.prevent="deleteRow(scope.$index, details)" type="text" size="small">
+                                    <el-button @click.native.prevent="deleteRow(scope.$index, details)" type="text" size="medium">
                                         移除
+                                    </el-button>
+                                    <el-button v-if="scope.row.priceDisabled" @click.native.prevent="itemPriceDiscount(scope.row, false)" type="text" size="medium">
+                                        不用套餐
                                     </el-button>
                                 </template>
                             </el-table-column>
@@ -105,12 +107,20 @@
                     <!-- </div> -->
                 </div>
                 <div class="footDiv">
-                    <el-button type="warning" class="footBtn">挂单</el-button>
+                    <el-button type="warning" class="footBtn" :disabled="details.length ==0">挂单</el-button>
                     <el-button type="primary" class="footBtn">取单</el-button>
-                    <el-button type="success" class="footBtn">结账</el-button>
+                    <el-button type="success" class="footBtn" :disabled="details.length ==0" @click="checkOut">结账</el-button>
                 </div>
             </div>
         </div>
+        <el-dialog title="提示" :visible.sync="checkOutDialog" :before-close="handleClose" center 
+        :modal-append-to-body="false" append-to-body custom-class="checkOutDialog">
+            <span>需要注意的是内容是默认不居中的</span>
+            <span slot="footer" class="dialog-footer">
+                <el-button type="warning" @click="handleClose" >取消结算</el-button>
+                <el-button type="success" @click="checkOutDialog = false" class="checkOutBtn">确定结算</el-button>
+            </span>
+        </el-dialog>
     </div>
    
 </template>
@@ -127,7 +137,6 @@ export default {
         return {
             key:null,
             bindModel:'first',
-            PackageData:[],
             ItemTypes:[{name:'洗车',no:'1'},{name:'钣金',no:'2'},{name:'喷漆',no:'3'},],
             Items:[{
                 img:"http://img.baidu.com/img/iknow/avarta/66/r6s1g3.gif",
@@ -138,7 +147,7 @@ export default {
                 id:1,
             },{
                 img:"http://img.baidu.com/img/iknow/avarta/66/r6s1g3.gif",
-                name:'急速修补轮胎',
+                name:'急速修补轮胎超',
                 price:'88.00',
                 typeNo:'1',
                 type:'1',
@@ -305,7 +314,14 @@ export default {
                 plateNumber:'粤L7Z053',
                 brand:'现代',
                 discount:8,
-                itemPackages:[],
+                itemPackages:[{
+                    itemId:1,
+                    itemName:"纳米高科技无泡洗车",
+                    remainingTimes:907,
+                    sunTimes:999,
+                    onceMoney:19899,
+                    validDate:'2018-02-10',
+                }],
             },{
                 id:2,
                 name:"李建1",
@@ -320,19 +336,33 @@ export default {
                 discount:5,
                  itemPackages:[],
             }],
-            member:{},
+            member:{
+                id:0,
+                itemPackages:[],
+                cardTypeId:0,
+                discount:10,
+                name:"",
+                pinYin:"",
+                mobile:"",
+                sex:'M',
+                cardFee:0,
+                presentFee:0,
+                point:0,
+                plateNumber:'',
+                brand:'',
+            },
             details:[],
             detail:null,
             detailIndex:-1,
             showMemList:false,//是否显示查询出的会员列表
             showMemInfo:false,//是否显示会员信息
             carddiscList:[],//卡级折扣会员价
+            checkOutDialog:false,//显示结账收钱页面
+            leftShade:false,//选择项目阴影
         }
     },
     methods: {
         handleClick(path) {
-            // this.$router.push(this.menus[index].path);
-        
         },
         /**
          * 移除选中项目
@@ -352,13 +382,15 @@ export default {
                 btype: "1",
                 ctype: "1",
                 emps:[],
+                priceDisabled:false,
             }
             if(this.member.id){
-                detail.price = this.itemPriceDiscount(detail);
+                detail = this.itemPriceDiscount(detail,true);
             }
             this.detail= detail;
             this.details.push(detail);
             this.detailIndex = this.details.indexOf(detail);
+            this.leftShade=true;
         },
         //表单中选择项目
         detailChange(row,event,column){
@@ -375,7 +407,6 @@ export default {
                 });
                 return;
             }
-            this.detail.emps
             let empBoolean = true
             for(let i in this.detail.emps){
                 let staff = this.detail.emps[i];
@@ -388,6 +419,7 @@ export default {
                 this.detail.emps.push(emp);
             }
             this.details.splice(this.detailIndex, 1,this.detail);
+            this.leftShade = false;
         },
         queryMember(){
             if(!this.key){
@@ -397,22 +429,17 @@ export default {
                 });
                 return;
             }
-            console.log(this.key,"this.key")
             this.showMemInfo= false;
             this.showMemList=true;
-            
         },
         //选择消费的会员
         chooseMember(member){
             this.member = member;
-            
             this.showMemList=false;
             this.showMemInfo=true;
             for(let detail of this.details){
-                console.log(detail,"能出现")
-                detail.price = this.itemPriceDiscount(detail);
+                detail= this.itemPriceDiscount(detail,true);
             }
-            
         },
         //获取合计消费金额
         getSummaries(param) {
@@ -440,32 +467,63 @@ export default {
             });
             return sums;
         },
-        itemPriceDiscount(data){
+        //计算项目实际价格
+        itemPriceDiscount(detail,bool){
+            //bool是否使用套餐,默认使用
             for(let itemPackage of this.member.itemPackages){
-                if(itemPackage.itemId == data.itenId){
-                    return itemPackage.money;
-                }
-            }
-            for(let carddisc of this.carddiscList ){
-                if(carddisc.itemId == data.itemId && (carddisc.cardTypeId == this.member.cardTypeId || carddisc.cardTypeId =='ALL')){
-                    if(carddisc.way =='1'){
-                        return carddisc.disc;
+                if(itemPackage.itemId == detail.itemId){
+                    if(bool){
+                        detail.price = itemPackage.onceMoney;
+                        detail.priceDisabled = true;
+                        itemPackage.remainingTimes--;
+                        return detail;
                     }else{
-                        return (carddisc.disc*data.rawPrice/10).toFixed(0);
+                        detail.priceDisabled = false;
+                        itemPackage.remainingTimes++;
                     }
                 }
             }
-            if(this.member.discount){
-                return (this.member.discount*data.rawPrice/10).toFixed(0);
-            }else{
-                return data.rawPrice.toFixed(0);
+            for(let carddisc of this.carddiscList ){
+                if(carddisc.itemId == detail.itemId && (carddisc.cardTypeId == this.member.cardTypeId || carddisc.cardTypeId =='ALL')){
+                    if(carddisc.way =='1'){
+                        detail.price = carddisc.disc;
+                    }else{
+                        detail.price = (carddisc.disc*detail.rawPrice/10).toFixed(0);
+                    }
+                    return detail;
+                }
             }
+            if(this.member.discount){
+                detail.price = (this.member.discount*detail.rawPrice/10).toFixed(0);
+            }else{
+                detail.price = detail.rawPrice.toFixed(0);
+            }
+            return detail;
+        },
+        checkOut(){
+            this.checkOutDialog=true;
+        },
+        //关闭结账弹窗
+        handleClose(done){
+            this.$confirm('放弃结算，确认关闭弹窗？',{
+                confirmButtonText: '确定放弃',
+                cancelButtonText: '继续结算',
+                cancelButtonClass:'cancelClass',
+                confirmButtonClass:'confimClass'
+            })
+            .then(_ => {
+                console.log(done,"done")
+                this.checkOutDialog = false;
+            })
+            .catch(_ => {});
         }
+    },
+    mounted(){
+        console.log(this.$refs,"快进来");
     }
 }
 </script>
 <style scoped lang="less">
-
     .body{
         .leftContainer{
             margin-right: 0.4%;
@@ -475,11 +533,21 @@ export default {
             float: left;
             background-color: #fff;
         }
+        .leftShade{
+            position: fixed;
+            z-index: 2001;
+            top: 0;
+            left:0;
+            width:calc(~'((100% - 85px) -10px) * 0.338 + 90px');
+            height: 100%;
+            opacity: .2;
+            background: #000;
+        }
         .center{
             margin-right: 0.4%;
         }
         .rightContainer{
-             float: left;
+            float: left;
             width: 65.9%;
             height: 100%;
             background-color: #fff;
@@ -534,7 +602,6 @@ export default {
                             overflow: scroll;
                             height: 270px !important;
                         }
-
                     }
                 }
             }
@@ -558,10 +625,10 @@ export default {
                         .el-input{
                             .el-input__inner{
                                 padding: 0 !important;
+                                border:none;
                             }
                         }
                     }
-                    
                 }
                 .footDiv{
                     // background-color: yellow;
@@ -579,6 +646,11 @@ export default {
             float: left;
             background-color: #fff;
         }
+        .checkOutDialog{
+            .checkOutBtn{
+                margin-left: 58.9% !important;
+            }
+        }
         
     }
 </style>
@@ -589,14 +661,33 @@ export default {
         padding: 0 !important;
         .el-input{
             .el-input__inner{
-                // padding: 0 !important;
                 height: 30px;
+                border:none;
             }
         }
+        
     }
 }
+.el-button--medium{
+    color:#eb9e05 !important;
+    padding: 0 !important;
+}
 .current-row td{
-    background-color: blue !important;
-    color:#fff;
+    background-color: #409EFF !important;
+    color:#fff !important;
+}
+.cancelClass{
+    background-color: #409EFF !important;
+    border-color:#409EFF;
+    color: #fff !important;     
+}
+.confimClass{
+    background-color: #fa5555 !important;
+    border-color:#fa5555;
+    color: #fff !important;
+    margin-left:58.9% !important;
+}
+.checkOutBtn{
+    margin-left: 58.9% !important;
 }
 </style>
